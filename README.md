@@ -1,20 +1,44 @@
 # ng-store
 
 ```typescript
-abstract class Storable {
-  public id: string;
-  public $path: string[];
+abstract class StoreItem {
+  public _id: string;
+  public _path: string[];
+  
+  constructor() {
+    this._id = Guid.new();
+  }
+}
+```
+
+```typescript
+interface Options {
+  deep: number; // default => 0, recursive => -1
 }
 ```
 
 ```typescript
 interface Store {
-  set(path: string[], value: any): Promise<void>;
-  remove(path: string[]): Promise<void>;
-  attach(path: string[], value: any): Promise<void>;
-  detach(path: string[], value: any): Promise<void>;
-  get<TValue>(path: string[]): Observable<TValue>;
+  set<TValue>(path: string[], value: TValue): Promise<TValue>;
+  remove(path: string[]): Promise<any>;
+  attach<TValue>(path: string[], value: TValue): Promise<TValue>;
+  detach<TValue>(path: string[], value: TValue): Promise<TValue>;
+  get<TValue>(path: string[], options?: Options): Promise<TValue>;
   watch<TValue>(path: string[]): Observable<TValue>;
+}
+```
+
+
+```typescript
+class Order extends StoreItem {
+  public number: string;
+  public items: OrderItem[] = [];
+}
+```
+
+```typescript
+class OrderItem extends StoreItem {
+  public quantity: number;
 }
 ```
 
@@ -22,11 +46,18 @@ interface Store {
 ```typescript
 @Component({
   selector: 'order-list-comp',
-  template: `<order-comp 
-                (click)="selectOrder(order)" 
-                [order]="order" 
-                [selected]="order === selectedOrder$ | async" 
-                *ngFor="let order of orders$ | async"></order-comp>`
+  template: `
+    <div class="actions">
+      <button (click)="addOrder()">Add</button>
+    </div>
+    <div class="orders">
+      <order-comp 
+          (click)="selectOrder(order)" 
+          [order]="order" 
+          [selected]="order === selectedOrder$ | async" 
+          *ngFor="let order of orders$ | async"></order-comp>
+    </div>
+  `
 })
 class OrderListComponent {
   public orders$: Observable<Order[]>;
@@ -39,10 +70,11 @@ class OrderListComponent {
   
   public selectOrder(order: Order): void {
     this.store.set(['selectedOrder'], order);
+    // set order for key ['selectedOrder']
   }
   
-  public addOrder(order: Order): void {
-    this.store.attach(['orders'], order);
+  public addOrder(): void {
+    this.store.attach(['orders'], new Order());
   }
   
   public removeOrder(order: Order): void {
@@ -74,10 +106,16 @@ class OrderComponent {
     this.items$ = this.store.watch<OrderItem[]>([order, 'items']);
   }
   
+  ngOnInit() {
+    console.log(this.order);
+    // { _id: "order-guid", items: null, _path: ["orders", "order-guid"] }
+  }
+  
   public add(): void {
     this.sidenav.open().then(item => {
       if(item)
         this.store.attach([order, 'items'], item);
+        // attach item object for key ["orders", "order-guid", "items"]
     });
   }
 }
@@ -99,10 +137,17 @@ class OrderItemComponent {
   @Input() public item: OrderItem;
   
   constructor(private store: Store) {
+    
+  }
+  
+  ngOnInit() {
+    console.log(this.item);
+    // { _id: "item-guid", quantity: 0, _path: ["orders", "order-guid", "items", "item-guid"] }
   }
   
   public changeQuantity(quantity: number): void {
     this.store.set([item, 'quantity'], quantity);
+    // set quantity for key ["orders", "order-guid", "items", "item-guid", "quantity"]
   }
 }
 ```
